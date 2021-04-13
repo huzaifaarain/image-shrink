@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="script-src 'self' 'unsafe-inline'"
+    />
+    <link rel="stylesheet" href="css/all.min.css" />
+    <link rel="stylesheet" href="css/materialize.min.css" />
+    <link rel="stylesheet" href="css/style.css" />
+    <title>ImageShrink</title>
+  </head>
+  <body>
+    <div class="container center-align">
+      <h3><i class="fas fa-images"></i> ImageShrink</h3>
+      <p>Choose an image to resize</p>
+      <form id="image-form">
+        <div class="file-field input-field">
+          <div class="btn">
+            <span>Browse</span>
+            <input
+              type="file"
+              name="images"
+              id="images"
+              accept="image/jpeg,image/png"
+              multiple
+            />
+          </div>
+
+          <div class="file-path-wrapper">
+            <input
+              class="file-path validate"
+              type="text"
+              placeholder="Upload files, allowed types (jpg,jpeg,png)"
+            />
+          </div>
+        </div>
+
+        <p>
+          <strong>Quality:</strong>
+          <em>The lower the quality, the smaller the filesize</em>
+        </p>
+        <p class="range-field">
+          <input type="range" name="quality" id="slider" min="0" max="100" />
+        </p>
+
+        <input
+          type="submit"
+          class="black btn"
+          id="btn-Submit"
+          value="Optimize"
+        />
+        <div class="progress" id="progress" style="display: none">
+          <div class="indeterminate"></div>
+        </div>
+        <input type="reset" class="red btn" value="Reset" />
+      </form>
+
+      <div class="card output">
+        <div class="card-content">
+          Output Path: <span id="output-path"></span>
+        </div>
+      </div>
+    </div>
+
+    <script src="js/materialize.min.js"></script>
+    <script>
+      const path = require("path")
+      const os = require("os")
+      const { ipcRenderer } = require("electron")
+      const destPath = path.join(os.homedir(), "imageshrink")
+      const progress = document.getElementById("progress")
+      const btnSubmit = document.getElementById("btn-Submit")
+      document.getElementById("output-path").innerText = destPath
+
+      document.getElementById("images").addEventListener("change", (e) => {
+        let errFlag = false
+        for (let index = 0; index < e.target.files.length; index++) {
+          let file = e.target.files.item(index)
+          if (file.type != "image/jpeg" && file.type != "image/png") {
+            errFlag = true
+            break
+          }
+        }
+        if (errFlag) {
+          M.toast({
+            html:
+              "Only jpeg and png type files are allowed, other formats will be ignored automatically.",
+          })
+        }
+      })
+
+      const form = document.getElementById("image-form")
+      form.addEventListener("submit", (e) => {
+        e.preventDefault()
+        btnSubmit.value = "Please wait..."
+        progress.style.display = "block"
+        let formData = new FormData(e.target)
+        let data = {
+          quality: formData.get("quality"),
+          destination: destPath,
+        }
+        data.images = formData
+          .getAll("images")
+          .filter(
+            (file) =>
+              file.path != "" &&
+              (file.type == "image/jpeg" || file.type == "image/png")
+          )
+          .map((file) => file.path)
+        if (data.images.length == 0) {
+          alert("Please select at least one image.")
+          progress.style.display = "none"
+          btnSubmit.value = "Optimize"
+          return
+        }
+        ipcRenderer.send("image:minimize", data)
+      })
+
+      ipcRenderer.on("image:done", (e) => {
+        M.toast({
+          html: "Image(s) has been optimized.",
+        })
+        progress.style.display = "none"
+        btnSubmit.value = "Optimize"
+        form.reset()
+      })
+
+      ipcRenderer.on("image:exception", (e, data) => {
+        M.toast({
+          html: `Exception: ${data}`,
+        })
+        progress.style.display = "none"
+        btnSubmit.value = "Optimize"
+        form.reset()
+      })
+    </script>
+  </body>
+</html>
